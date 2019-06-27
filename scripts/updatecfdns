@@ -2,4 +2,5 @@
 import cfdnsupdater.main
 
 if __name__ == '__main__':
-    cfdnsupdater.main.main()
+    main = cfdnsupdater.main.Main()
+    main.main()
