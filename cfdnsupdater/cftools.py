@@ -6,18 +6,20 @@ from cfdnsupdater.helper import Loggable
 
 
 class CFToolException(Exception):
-    def __init__(self, msg: str):
+    def __init__(self, msg):
+        # type: (str) -> None
         super(CFToolException, self).__init__(msg)
 
 
 class CFTools(Loggable):
-    _cf: CloudFlare
+    __slots__ = "_cf"
 
-    def __init__(self, cf: CloudFlare):
-        super().__init__()
-        self._cf = cf
+    def __init__(self, cf):
+        # type: (CloudFlare) -> None
+        self._cf = cf  # type: CloudFlare
 
-    def get_zone_id(self, zone_name: str):
+    def get_zone_id(self, zone_name):
+        # type: (str) -> str
         try:
             zones = self._cf.zones.get(params={"name": zone_name, "per_page": 1})
         except exceptions.CloudFlareAPIError as e:
@@ -31,26 +33,30 @@ class CFTools(Loggable):
         zone = zones[0]
         return zone["id"]
 
-    def get_dns_records(self, zone_id: str):
+    def get_dns_records(self, zone_id):
+        # type: (str) -> List[Dict[str,]]
         try:
             return self._cf.zones.dns_records.get(zone_id)
         except exceptions.CloudFlareAPIError as e:
             raise CFToolException("/zones/dns_records.get %d %s - api call failed" % (int(e), e))
 
     @staticmethod
-    def filter_dns_record(dns_records: List[Dict[str, str]], dtype: str, name: str) -> Dict[str, str]:
+    def filter_dns_record(dns_records, dtype, name):
+        # type: (List[Dict[str,]], str, str) -> Dict[str, object]
         for dns_record in dns_records:
             if dns_record["type"] == dtype and dns_record["name"] == name:
                 return dns_record
         raise CFToolException("Could not find matching DNS entry with type %s and name %s" % (dtype, name))
 
-    def update_dns_record(self, zone_id: str, dns_record: Dict[str, str]):
+    def update_dns_record(self, zone_id, dns_record):
+        # type: (str, Dict[str, str]) -> Dict[str,]
         try:
             return self._cf.zones.dns_records.put(zone_id, dns_record["id"], data=dns_record)
         except exceptions.CloudFlareAPIError as e:
             raise CFToolException("/zones.dns_records.post %s - %d %s" % (dns_record["name"], int(e), e))
 
-    def get_existing_dns_record(self, zone_id: str, rname: str, rtype: str):
+    def get_existing_dns_record(self, zone_id, rname, rtype):
+        # type: (str, str, str) -> Dict[str,]
         dns_records = self.get_dns_records(zone_id)
         self.log().debug("Found existing DNS records:")
         # then all the DNS records for that zone
@@ -67,7 +73,8 @@ class CFTools(Loggable):
 
         return self.filter_dns_record(dns_records, rtype, rname)
 
-    def perform_update(self, zone_id: str, rname: str, rtype: str, ip: str):
+    def perform_update(self, zone_id, rname, rtype, ip):
+        # type: (str, str, str, str) -> None
         dns_record = self.get_existing_dns_record(zone_id, rname, rtype)
 
         self.log().info("Updating record with name %s and type %s with content %s" % (rname, rtype, ip))

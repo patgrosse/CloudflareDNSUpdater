@@ -2,10 +2,10 @@ import argparse
 import logging
 import signal
 import sys
-from configparser import ConfigParser
 from threading import Event
 
 from CloudFlare import CloudFlare
+from backports.configparser import ConfigParser
 
 from cfdnsupdater.cftools import CFTools, CFToolException
 from cfdnsupdater.helper import Loggable
@@ -47,7 +47,9 @@ class Main(Loggable):
                                                                        "the used local IP address, update in an "
                                                                        "interval (more privacy, does not work "
                                                                        "for NAT)",
-                                               dest="tracker", required=True)
+                                               dest="tracker")
+        tracker_parser.required = True
+
         # # netlink tracker
         nat_parser = tracker_parser.add_parser("netlink", description="Use Linux netlink API to keep "
                                                                       "track of local IP address changes (does "
@@ -93,7 +95,8 @@ class Main(Loggable):
                 else:
                     raise Exception("Unexpected tracker type %s", args.tracker)
 
-            def update_ip(ip: str):
+            def update_ip(ip):
+                # type: (str) -> None
                 try:
                     cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", ip)
                 except CFToolException:
