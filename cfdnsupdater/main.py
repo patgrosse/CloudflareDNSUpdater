@@ -1,9 +1,7 @@
 import argparse
 import logging
-import signal
-import sys
-from threading import Event
 
+import time
 from CloudFlare import CloudFlare
 from backports.configparser import ConfigParser
 
@@ -105,15 +103,13 @@ class Main(Loggable):
             monitor = Monitor(create_tracker, update_ip, args.restart)
             monitor.start()
 
-            def signal_handler(_signal, _frame):
-                self.log().info("Caught SIGINT, stopping...")
-                monitor.stop()
-                sys.exit(0)
-
-            signal.signal(signal.SIGINT, signal_handler)
-
-            forever = Event()
-            forever.wait()
+            while True:
+                try:
+                    time.sleep(100)
+                except KeyboardInterrupt:
+                    self.log().info("Caught SIGINT, stopping...")
+                    monitor.stop()
+                    break
 
         elif args.mode == "manual":
             if args.tracker_man == "ipify":
