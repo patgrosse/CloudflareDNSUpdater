@@ -164,11 +164,11 @@ class SocketIPAddressTracker(IntervalIPAddressTracker):
         # type: () -> str
         if self._ipv6:
             s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            # Use CloudFlare DNS server to determine IPv6
+            # Use Cloudflare DNS server to determine IPv6
             s.connect(("2606:4700:4700::1111", 80))
         else:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # Use CloudFlare DNS server to determine IPv4
+            # Use Cloudflare DNS server to determine IPv4
             s.connect(("1.1.1.1", 80))
 
         ip = s.getsockname()[0]

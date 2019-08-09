@@ -14,7 +14,7 @@ class Main(Loggable):
     def main(self):
         logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-        parser = argparse.ArgumentParser(description="Tool for keeping a DNS record at CloudFlare up to date with "
+        parser = argparse.ArgumentParser(description="Tool for keeping a DNS record at Cloudflare up to date with "
                                                      "dynamically changing IP adresses",
                                          formatter_class=argparse.RawTextHelpFormatter)
         parser.add_argument("--config", required=True, help="Path to config file with credentials etc.", metavar="FILE",
