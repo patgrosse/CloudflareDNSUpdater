@@ -73,6 +73,21 @@ zone = domain.com
 name = subdomain.domain.com
 ```
 
+## Docker
+
+This project ships with a Dockerfile providing a basic Alpine Linux based container. Its usage is analogue to the standard CLI:
+
+1. Build: `docker build . -t patgrosse/cfdnsupdater`
+2. Use: `docker run --net=host -v <path/to/configfile.ini>:/config.ini patgrosse/cfdnsupdater --config /config.ini <arguments>`
+
+Example:
+
+`docker run --net=host -v /home/patrick/.secrets/dns_config.ini:/config.ini patgrosse/cfdnsupdater --config /config.ini -6 --auto netlink`
+
+### Docker compose
+See `docker-compose.yml` for an example.
+
+
 ## Notes
 
-* You have to create the DNS entry at Cloudflare yourself, it is not created automatically by this tool
+* You have to create the DNS entry at Cloudflare yourself, it is not created automatically by this tool.

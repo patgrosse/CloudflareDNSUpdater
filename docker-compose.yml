@@ -1,0 +1,9 @@
+version: "2.4"
+services:
+  cfdnsupdater:
+    build: "." # if you want to build automatically from source
+    image: "patgrosse/cfdnsupdater"
+    network_mode: "host"
+    volumes:
+      - "/home/patrick/.secrets/dns_config.ini:/config.ini"
+    command: "--config /config.ini -6 --auto netlink"
