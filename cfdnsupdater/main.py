@@ -1,5 +1,7 @@
 import argparse
 import logging
+import signal
+import sys
 
 import time
 from CloudFlare import CloudFlare
@@ -103,6 +105,12 @@ class Main(Loggable):
 
             monitor = Monitor(create_tracker, update_ip, args.restart)
             monitor.start()
+
+            def sigterm_handler(_signo, _stack_frame):
+                self.log().info("Caught SIGTERM, stopping...")
+                sys.exit(0)
+
+            signal.signal(signal.SIGTERM, sigterm_handler)
 
             while True:
                 try:
