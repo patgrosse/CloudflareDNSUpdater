@@ -3,7 +3,8 @@ import logging
 
 import time
 from CloudFlare import CloudFlare
-from backports.configparser import ConfigParser
+# noinspection PyCompatibility
+from configparser import ConfigParser
 
 from cfdnsupdater.cftools import CFTools, CFToolException
 from cfdnsupdater.helper import Loggable
