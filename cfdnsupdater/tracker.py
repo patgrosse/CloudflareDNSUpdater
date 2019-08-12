@@ -1,12 +1,12 @@
 import socket
 from abc import abstractmethod, ABCMeta
 from threading import Event, Thread
+from typing import Callable, Optional
 
 import six
 from pyroute2 import IPDB, IPRoute
 from pyroute2.netlink import nlmsg
 from requests import get
-from typing import Callable, Union
 
 from cfdnsupdater.helper import Loggable
 
@@ -54,9 +54,10 @@ class NetlinkIPAddressTracker(IPAddressTracker):
         self._ipr = IPRoute()  # type: IPRoute
         self._callback_uuid = 0  # type: int
 
-        self._iface_index = self._find_interface_index()  # type: Union[int, None]
+        self._iface_index = self._find_interface_index()  # type: int
 
     def _find_interface_index(self):
+        # type: () -> int
         if self._iface_name is None:
             routes = self._ipdb.routes.filter({"dst": "default", "family": self._family})
             if len(routes) == 0:
@@ -115,7 +116,7 @@ class IntervalIPAddressTracker(IPAddressTracker):
         self.update_interval = update_interval
 
         self._kill_thread = Event()  # type: Event
-        self._t = None  # type: Union[Thread, None]
+        self._t = None  # type: Optional[Thread]
 
     def start(self):
         self._t = Thread(target=self._run, name="IntervalIPAddressTracker")
@@ -184,14 +185,14 @@ class Monitor(Loggable):
         # type: (Callable[[], IPAddressTracker], Callable[[str], None], int) -> None
         super(Monitor, self).__init__()
         self._tracker_factory = tracker_factory  # type: Callable[[], IPAddressTracker]
-        self._callback = callback  # type: Union[Callable[[str], None], None]
+        self._callback = callback  # type: Optional[Callable[[str], None]]
         self._autorestart_timeout = autorestart_timeout  # type: int
 
-        self._tracker = None  # type: Union[IPAddressTracker, None]
-        self._restart_thread = None  # type: Union[Thread, None]
+        self._tracker = None  # type: Optional[IPAddressTracker]
+        self._restart_thread = None  # type: Optional[Thread]
         self._kill_thread = Event()  # type: Event
         self._is_running = False  # type: bool
-        self._last_ip = None  # type: Union[str, None]
+        self._last_ip = None  # type: Optional[str]
 
     def start(self):
         self._restart_thread = Thread(target=self._run, name="MonitorRestart")
@@ -219,7 +220,7 @@ class Monitor(Loggable):
             self._tracker.register_callback(self._ip_updated)
             self._tracker.start()
         except Exception:
-            self.log().error("Exception on starting tracker", exc_info=True)
+            self.log().exception("Exception on starting tracker")
 
     def _stop_tracker(self):
         # noinspection PyBroadException
@@ -227,7 +228,7 @@ class Monitor(Loggable):
             if self._tracker is not None:
                 self._tracker.stop()
         except Exception:
-            self.log().error("Exception on stopping tracker", exc_info=True)
+            self.log().exception("Exception on stopping tracker")
 
     def _run(self):
         self._start_tracker()

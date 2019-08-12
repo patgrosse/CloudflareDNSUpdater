@@ -2,11 +2,11 @@ import argparse
 import logging
 import signal
 import sys
-
 import time
-from CloudFlare import CloudFlare
 # noinspection PyCompatibility
 from configparser import ConfigParser
+
+from CloudFlare import CloudFlare
 
 from cfdnsupdater.cftools import CFTools, CFToolException
 from cfdnsupdater.helper import Loggable
@@ -82,7 +82,7 @@ class Main(Loggable):
         cf = CloudFlare(email=email, token=token)
         cft = CFTools(cf)
 
-        zone_id = cft.get_zone_id(zone_name)
+        zone_id = cft.get_zone_id_by_name(zone_name)
         self.log().info("Using zone: %s %s" % (zone_id, zone_name))
 
         if args.mode == "auto":
@@ -101,7 +101,7 @@ class Main(Loggable):
                 try:
                     cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", ip)
                 except CFToolException:
-                    self.log().error("Exception on updating IP address", exc_info=True)
+                    self.log().exception("Exception on updating IP address")
 
             monitor = Monitor(create_tracker, update_ip, args.restart)
             monitor.start()
