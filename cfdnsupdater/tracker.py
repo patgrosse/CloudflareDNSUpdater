@@ -130,8 +130,6 @@ class IntervalIPAddressTracker(IPAddressTracker):
         self.log().debug("Stopped")
 
     def _run(self):
-        # initial run
-        self._callback(self.get_current())
         while not self._kill_thread.wait(self.update_interval):
             self._callback(self.get_current())
 
@@ -219,6 +217,8 @@ class Monitor(Loggable):
             self._tracker = self._tracker_factory()
             self._tracker.register_callback(self._ip_updated)
             self._tracker.start()
+            # initial run
+            self._ip_updated(self._tracker.get_current())
         except Exception:
             self.log().exception("Exception on starting tracker")
 
