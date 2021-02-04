@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python3
 from setuptools import setup
 
 setup(name="CloudFlareDNSUpdater",
@@ -9,6 +8,6 @@ setup(name="CloudFlareDNSUpdater",
       author_email="patrick.pgrosse@gmail.com",
       packages=["cfdnsupdater"],
       scripts=["scripts/updatecfdns"],
-      python_requires='>=2.7',
-      install_requires=["CloudFlare==2.3.0", "pyroute2==0.5.6", "requests==2.22.0"]
+      python_requires='>=3',
+      install_requires=["CloudFlare==2.8.15", "pyroute2==0.5.14", "requests==2.25.1", "configparser==3.7.4"]
       )

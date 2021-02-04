@@ -2,11 +2,8 @@ import logging
 from abc import ABCMeta
 from typing import Optional
 
-import six
 
-
-@six.add_metaclass(ABCMeta)
-class Loggable(object):
+class Loggable(object, metaclass=ABCMeta):
     __slots__ = ()
     _log = None  # type: Optional[logging.Logger]
 

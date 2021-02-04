@@ -3,16 +3,14 @@ from abc import abstractmethod, ABCMeta
 from threading import Event, Thread
 from typing import Callable, Optional
 
-import six
-from pyroute2 import IPDB, IPRoute
+from pyroute2 import IPRoute
 from pyroute2.netlink import nlmsg
 from requests import get
 
 from cfdnsupdater.helper import Loggable
 
 
-@six.add_metaclass(ABCMeta)
-class IPAddressTracker(Loggable):
+class IPAddressTracker(Loggable, metaclass=ABCMeta):
     __slots__ = "_callback"
 
     def __init__(self):
@@ -41,7 +39,8 @@ class NetlinkIPAddressTracker(IPAddressTracker):
     SCOPE_GLOBAL = 0  # type: int
     ACTION_NEWADDR = "RTM_NEWADDR"  # type: str
 
-    __slots = ("_iface_name", "_ipv6", "_family", "_ipdb", "_ipr", "_callback_uuid", "_iface_index")
+    __slots = (
+        "_iface_name", "_ipv6", "_family", "_ipdb", "_ipr", "_callback_uuid", "_kill_thread", "_t", "_iface_index")
 
     def __init__(self, ipv6, iface_name=None):
         # type: (bool, str) -> None
@@ -50,19 +49,21 @@ class NetlinkIPAddressTracker(IPAddressTracker):
         self._ipv6 = ipv6  # type: bool
         self._family = socket.AF_INET6 if ipv6 else socket.AF_INET
 
-        self._ipdb = IPDB()  # type: IPDB
         self._ipr = IPRoute()  # type: IPRoute
         self._callback_uuid = 0  # type: int
+
+        self._kill_thread = Event()  # type: Event
+        self._t = None  # type: Optional[Thread]
 
         self._iface_index = self._find_interface_index()  # type: int
 
     def _find_interface_index(self):
         # type: () -> int
         if self._iface_name is None:
-            routes = self._ipdb.routes.filter({"dst": "default", "family": self._family})
+            routes = self._ipr.get_default_routes(family=self._family)
             if len(routes) == 0:
                 raise Exception("No interface name given and no default route set")
-            interface = self._ipr.get_links(routes[0]["route"]["oif"])[0]
+            interface = self._ipr.get_links(routes[0].get_attr('RTA_OIF'))[0]
             ifname = interface.get_attr("IFLA_IFNAME")
             self.log().info("Using interface %s" % ifname)
             return interface.get("index")
@@ -74,14 +75,11 @@ class NetlinkIPAddressTracker(IPAddressTracker):
             return iface_ids[0]
 
     def start(self):
-        def new_address_callback(_ipdb, netlink_message, action):
-            # type: (IPDB, nlmsg, str) -> None
-            if action == self.ACTION_NEWADDR and netlink_message['family'] == self._family and \
-                    netlink_message['scope'] == self.SCOPE_GLOBAL and netlink_message['index'] == self._iface_index:
-                addr = NetlinkIPAddressTracker._get_attr(netlink_message, 'IFA_ADDRESS')
-                self._callback(addr)
+        self._ipr.bind(async_cache=True)
 
-        self._callback_uuid = self._ipdb.register_callback(new_address_callback)
+        self._t = Thread(target=self._run, name="NetlinkIPAddressTracker")
+        self._t.start()
+
         self.log().debug("Started")
 
     def get_current(self):
@@ -90,9 +88,10 @@ class NetlinkIPAddressTracker(IPAddressTracker):
         return NetlinkIPAddressTracker._get_attr(nl_msg[0], 'IFA_ADDRESS')
 
     def stop(self):
-        self._ipdb.unregister_callback(self._callback_uuid)
-        self._ipdb.release()
+        self._kill_thread.set()
         self._ipr.close()
+        if self._t is not None:
+            self._t.join()
         self.log().debug("Stopped")
 
     @staticmethod
@@ -103,9 +102,16 @@ class NetlinkIPAddressTracker(IPAddressTracker):
         for attr in (attr for attr in rule_attrs if attr[0] == attr_name):
             return attr[1]
 
+    def _run(self):
+        while not self._kill_thread.is_set():
+            for msg in self._ipr.get():
+                if msg['event'] == NetlinkIPAddressTracker.ACTION_NEWADDR and msg['family'] == self._family \
+                        and msg['scope'] == NetlinkIPAddressTracker.SCOPE_GLOBAL and msg['index'] == self._iface_index:
+                    addr = NetlinkIPAddressTracker._get_attr(msg, 'IFA_ADDRESS')
+                    self._callback(addr)
 
-@six.add_metaclass(ABCMeta)
-class IntervalIPAddressTracker(IPAddressTracker):
+
+class IntervalIPAddressTracker(IPAddressTracker, metaclass=ABCMeta):
     __slots__ = ("update_interval", "_kill_thread", "_t")
 
     def __init__(self, update_interval):

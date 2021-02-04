@@ -3,7 +3,6 @@ import logging
 import signal
 import sys
 import time
-# noinspection PyCompatibility
 from configparser import ConfigParser
 
 from CloudFlare import CloudFlare
