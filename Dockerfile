@@ -1,5 +1,7 @@
 FROM python:3-alpine
 
+RUN apk add --no-cache tini
+
 COPY / /cfdnsupdater/
 
 RUN cd /cfdnsupdater \
@@ -7,4 +9,4 @@ RUN cd /cfdnsupdater \
     && cd / \
     && rm -rf cfdnsupdater
 
-ENTRYPOINT [ "updatecfdns" ]
+ENTRYPOINT [ "/sbin/tini", "--", "updatecfdns" ]
