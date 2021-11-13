@@ -4,6 +4,8 @@ import signal
 import sys
 import time
 from configparser import ConfigParser
+from ipaddress import IPv4Address, IPv6Address
+from typing import Union
 
 from CloudFlare import CloudFlare
 
@@ -96,9 +98,9 @@ class Main(Loggable):
                     raise Exception("Unexpected tracker type %s", args.tracker)
 
             def update_ip(ip):
-                # type: (str) -> None
+                # type: (Union[IPv4Address, IPv6Address]) -> None
                 try:
-                    cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", ip)
+                    cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", str(ip))
                 except CFToolException:
                     self.log().exception("Exception on updating IP address")
 
@@ -127,6 +129,9 @@ class Main(Loggable):
             else:
                 raise Exception("Unexpected manual tracker type %s", args.tracker)
             current_ip = tracker.get_current()
-            cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", current_ip)
+            if current_ip is None:
+                self.log().error("Couldn't find a valid external IP address!")
+            else:
+                cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", str(current_ip))
         else:
             raise Exception("Unexpected mode %s" % args.mode)

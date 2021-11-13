@@ -1,7 +1,8 @@
 import socket
 from abc import abstractmethod, ABCMeta
+from ipaddress import IPv4Address, IPv6Address, ip_address
 from threading import Event, Thread
-from typing import Callable, Optional
+from typing import Callable, Optional, Union, List
 
 from pyroute2 import IPRoute
 from pyroute2.netlink import nlmsg
@@ -15,15 +16,15 @@ class IPAddressTracker(Loggable, metaclass=ABCMeta):
 
     def __init__(self):
         super(IPAddressTracker, self).__init__()
-        self._callback = lambda x: None  # type: Callable[[str], None]
+        self._callback = lambda x: None  # type: Callable[[Union[IPv4Address, IPv6Address]], None]
 
     def register_callback(self, callback):
-        # type: (Callable[[str], None]) -> None
+        # type: (Callable[[Union[IPv4Address, IPv6Address]], None]) -> None
         self._callback = callback
 
     @abstractmethod
     def get_current(self):
-        # type: () -> str
+        # type: () -> Optional[Union[IPv4Address, IPv6Address]]
         raise NotImplementedError()
 
     @abstractmethod
@@ -83,9 +84,15 @@ class NetlinkIPAddressTracker(IPAddressTracker):
         self.log().debug("Started")
 
     def get_current(self):
-        # type: () -> str
-        nl_msg = self._ipr.get_addr(family=self._family, index=self._iface_index)
-        return NetlinkIPAddressTracker._get_attr(nl_msg[0], 'IFA_ADDRESS')
+        # type: () -> Optional[Union[IPv4Address, IPv6Address]]
+        nl_msgs = self._ipr.get_addr(family=self._family, index=self._iface_index,
+                                     scope=NetlinkIPAddressTracker.SCOPE_GLOBAL)  # type: List[nlmsg]
+        for nl_msg in nl_msgs:
+            addr = ip_address(
+                NetlinkIPAddressTracker._get_attr(nl_msg, 'IFA_ADDRESS'))  # type: Union[IPv4Address, IPv6Address]
+            if addr.is_global:
+                return addr
+        return None
 
     def stop(self):
         self._kill_thread.set()
@@ -107,19 +114,19 @@ class NetlinkIPAddressTracker(IPAddressTracker):
             for msg in self._ipr.get():
                 if msg['event'] == NetlinkIPAddressTracker.ACTION_NEWADDR and msg['family'] == self._family \
                         and msg['scope'] == NetlinkIPAddressTracker.SCOPE_GLOBAL and msg['index'] == self._iface_index:
-                    addr = NetlinkIPAddressTracker._get_attr(msg, 'IFA_ADDRESS')
-                    self._callback(addr)
+                    addr = ip_address(
+                        NetlinkIPAddressTracker._get_attr(msg, 'IFA_ADDRESS'))  # type: Union[IPv4Address, IPv6Address]
+                    if addr.is_global:
+                        self._callback(addr)
 
 
 class IntervalIPAddressTracker(IPAddressTracker, metaclass=ABCMeta):
     __slots__ = ("update_interval", "_kill_thread", "_t")
 
     def __init__(self, update_interval):
-        """
-        :type update_interval: int
-        """
+        # type: (int) -> None
         super(IntervalIPAddressTracker, self).__init__()
-        self.update_interval = update_interval
+        self.update_interval = update_interval  # type: int
 
         self._kill_thread = Event()  # type: Event
         self._t = None  # type: Optional[Thread]
@@ -137,7 +144,9 @@ class IntervalIPAddressTracker(IPAddressTracker, metaclass=ABCMeta):
 
     def _run(self):
         while not self._kill_thread.wait(self.update_interval):
-            self._callback(self.get_current())
+            addr = self.get_current()
+            if addr is not None:
+                self._callback(addr)
 
 
 class IpifyIPAddressTracker(IntervalIPAddressTracker):
@@ -149,12 +158,11 @@ class IpifyIPAddressTracker(IntervalIPAddressTracker):
         self._ipv6 = ipv6  # type: bool
 
     def get_current(self):
-        # type: () -> str
+        # type: () -> Optional[Union[IPv4Address, IPv6Address]]
         if self._ipv6:
-            ip = get('https://api6.ipify.org').text
+            return IPv6Address(get('https://api6.ipify.org').text)
         else:
-            ip = get('https://api.ipify.org').text
-        return ip
+            return IPv4Address(get('https://api.ipify.org').text)
 
 
 class SocketIPAddressTracker(IntervalIPAddressTracker):
@@ -166,19 +174,16 @@ class SocketIPAddressTracker(IntervalIPAddressTracker):
         self._ipv6 = ipv6  # type: bool
 
     def get_current(self):
-        # type: () -> str
-        if self._ipv6:
-            s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            # Use Cloudflare DNS server to determine IPv6
-            s.connect(("2606:4700:4700::1111", 80))
-        else:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            # Use Cloudflare DNS server to determine IPv4
-            s.connect(("1.1.1.1", 80))
-
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        # type: () -> Optional[Union[IPv4Address, IPv6Address]]
+        with socket.socket(socket.AF_INET6 if self._ipv6 else socket.AF_INET, socket.SOCK_DGRAM) as s:
+            if self._ipv6:
+                # Use Cloudflare DNS server to determine IPv6
+                s.connect(("2606:4700:4700::1111", 80))
+                return IPv6Address(s.getsockname()[0])
+            else:
+                # Use Cloudflare DNS server to determine IPv4
+                s.connect(("1.1.1.1", 80))
+                return IPv4Address(s.getsockname()[0])
 
 
 class Monitor(Loggable):
@@ -186,17 +191,17 @@ class Monitor(Loggable):
                  "_is_running", "_last_ip")
 
     def __init__(self, tracker_factory, callback, autorestart_timeout):
-        # type: (Callable[[], IPAddressTracker], Callable[[str], None], int) -> None
+        # type: (Callable[[], IPAddressTracker], Callable[[Union[IPv4Address, IPv6Address]], None], int) -> None
         super(Monitor, self).__init__()
         self._tracker_factory = tracker_factory  # type: Callable[[], IPAddressTracker]
-        self._callback = callback  # type: Optional[Callable[[str], None]]
+        self._callback = callback  # type: Optional[Callable[[Union[IPv4Address, IPv6Address]], None]]
         self._autorestart_timeout = autorestart_timeout  # type: int
 
         self._tracker = None  # type: Optional[IPAddressTracker]
         self._restart_thread = None  # type: Optional[Thread]
         self._kill_thread = Event()  # type: Event
         self._is_running = False  # type: bool
-        self._last_ip = None  # type: Optional[str]
+        self._last_ip = None  # type: Optional[Union[IPv4Address, IPv6Address]]
 
     def start(self):
         self._restart_thread = Thread(target=self._run, name="MonitorRestart")
@@ -211,7 +216,7 @@ class Monitor(Loggable):
         self.log().debug("Stopped")
 
     def _ip_updated(self, ip):
-        # type: (str) -> None
+        # type: (Union[IPv4Address, IPv6Address]) -> None
         if ip != self._last_ip:
             self._last_ip = ip
             if self._callback is not None:
@@ -224,7 +229,11 @@ class Monitor(Loggable):
             self._tracker.register_callback(self._ip_updated)
             self._tracker.start()
             # initial run
-            self._ip_updated(self._tracker.get_current())
+            current_ip = self._tracker.get_current()
+            if current_ip is None:
+                self.log().error("Couldn't find a valid external IP address!")
+            else:
+                self._ip_updated(current_ip)
         except Exception:
             self.log().exception("Exception on starting tracker")
 
