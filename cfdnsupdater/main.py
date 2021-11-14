@@ -100,7 +100,7 @@ class Main(Loggable):
             def update_ip(ip):
                 # type: (Union[IPv4Address, IPv6Address]) -> None
                 try:
-                    cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", str(ip))
+                    cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", ip)
                 except CFToolException:
                     self.log().exception("Exception on updating IP address")
 
@@ -132,6 +132,6 @@ class Main(Loggable):
             if current_ip is None:
                 self.log().error("Couldn't find a valid external IP address!")
             else:
-                cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", str(current_ip))
+                cft.perform_update(zone_id, rname, "AAAA" if ipv6 else "A", current_ip)
         else:
             raise Exception("Unexpected mode %s" % args.mode)

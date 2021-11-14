@@ -1,4 +1,6 @@
-from typing import Dict, List, Optional
+import ipaddress
+from ipaddress import IPv6Address, IPv4Address
+from typing import Dict, List, Optional, Union
 
 from CloudFlare import CloudFlare
 
@@ -53,7 +55,7 @@ class CFTools(Loggable):
         return None
 
     def perform_update(self, zone_id, rname, rtype, ip):
-        # type: (str, str, str, str) -> None
+        # type: (str, str, str, Union[IPv4Address, IPv6Address]) -> None
         dns_records = self.get_dns_records_by_zone(zone_id)
         self.log().debug("Found existing DNS records:")
         for dns_record in dns_records:
@@ -72,7 +74,7 @@ class CFTools(Loggable):
             raise CFToolException("Could not find matching DNS entry with type %s and name %s" % (rtype, rname))
 
         self.log().info("Updating record with name %s and type %s with content %s" % (rname, rtype, ip))
-        if dns_record["content"] == ip:
+        if ipaddress.ip_address(dns_record["content"]) == ip:
             self.log().info("No need for an update")
         else:
             self.log().info("Updating with new content %s" % ip)
