@@ -78,7 +78,7 @@ class CFTools(Loggable):
             self.log().info("No need for an update")
         else:
             self.log().info("Updating with new content %s" % ip)
-            dns_record["content"] = ip
+            dns_record["content"] = str(ip)
             response = self.update_dns_record(zone_id, dns_record)
 
             self.log().debug("Response:")
