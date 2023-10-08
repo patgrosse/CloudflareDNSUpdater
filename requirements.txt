@@ -1,4 +1,4 @@
-CloudFlare==2.8.15
-pyroute2==0.6.5
+CloudFlare==2.12.3
+pyroute2==0.7.3
 requests==2.31.0
-configparser==5.1.0
+configparser==6.0.0
